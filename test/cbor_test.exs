@@ -1,8 +1,4 @@
-defmodule CborTest do
+defmodule CBORTest do
   use ExUnit.Case
-  doctest Cbor
-
-  test "greets the world" do
-    assert Cbor.hello() == :world
-  end
+  doctest CBOR
 end

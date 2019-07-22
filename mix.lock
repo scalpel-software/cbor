@@ -1,0 +1,3 @@
+%{
+  "cbor": {:hex, :cbor, "0.1.8", "8996d095d80b69d7a4a2c47799e6c7ee7f195192cae14395babf1c97f2c4a999", [:mix], [], "hexpm"},
+}
