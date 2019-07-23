@@ -8,8 +8,12 @@ defmodule CBOR.DecoderTest do
 
   test "too little data" do
     assert_raise(FunctionClauseError, fn ->
-      CBOR.decode("") == 1
+      CBOR.Decoder.decode("") == 1
     end)
+  end
+
+  test "a non-binary value" do
+    assert CBOR.decode([]) == {:error, :cannot_decode_non_binary_values}
   end
 
   test "RFC 7049 Appendix A Example 1" do
