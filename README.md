@@ -57,9 +57,13 @@ NaiveDateTime will be treated as if they are UTC.
 
 Elixir and erlang have no concept of infinity, negative infinity and NaN. If you want to encode those values, we have a special struct `CBOR.Tag` which you can use to represent those values.
 
-> %CBOR.Tag{tag: :float, value: :inf}
-> %CBOR.Tag{tag: :float, value: :"-inf"}
-> %CBOR.Tag{tag: :float, value: :nan}
+```elixir
+%CBOR.Tag{tag: :float, value: :inf}
+
+%CBOR.Tag{tag: :float, value: :"-inf"}
+
+%CBOR.Tag{tag: :float, value: :nan}
+```
 
 CBOR.Tag is also useful if you want to extend CBOR for internal applications
 
