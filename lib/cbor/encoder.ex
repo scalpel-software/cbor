@@ -7,7 +7,7 @@ defimpl CBOR.Encoder, for: Atom do
   def encode_into(false, acc), do: <<acc::binary, 0xf4>>
   def encode_into(true, acc), do: <<acc::binary, 0xf5>>
   def encode_into(nil, acc), do: <<acc::binary, 0xf6>>
-  def encode_into(:undefined, acc), do: <<acc::binary, 0xf7>>
+  def encode_into(:__undefined__, acc), do: <<acc::binary, 0xf7>>
   def encode_into(v, acc), do: CBOR.Utils.encode_string(3, Atom.to_string(v), acc)
 end
 

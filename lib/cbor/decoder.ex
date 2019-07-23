@@ -104,7 +104,7 @@ defmodule CBOR.Decoder do
       <<0xf4, _::binary>> -> {false, rest}
       <<0xf5, _::binary>> -> {true, rest}
       <<0xf6, _::binary>> -> {nil, rest}
-      <<0xf7, _::binary>> -> {:undefined, rest}
+      <<0xf7, _::binary>> -> {:__undefined__, rest}
 
       <<0xf9, sign::size(1), exp::size(5), mant::size(10), _::binary>> ->
         {decode_half(sign, exp, mant), rest}

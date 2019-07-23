@@ -229,7 +229,7 @@ defmodule CBOR.DecoderTest do
 
   test "RFC 7049 Appendix A Example 44" do
     encoded = <<247>>
-    assert CBOR.decode(encoded) == {:ok, :undefined}
+    assert CBOR.decode(encoded) == {:ok, :__undefined__}
   end
 
   test "RFC 7049 Appendix A Example 45" do
