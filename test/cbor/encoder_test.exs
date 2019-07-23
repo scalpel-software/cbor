@@ -21,8 +21,12 @@ defmodule CBOR.EncoderTest do
     assert reconstruct(:__undefined__) == {:ok, :__undefined__}
   end
 
-  test "given an empty list" do
-    assert reconstruct([]) == {:ok, []}
+  test "given another atom (converts to string)" do
+    assert reconstruct(:another_atom) == {:ok, "another_atom"}
+  end
+
+  test "given a large string" do
+    assert reconstruct(String.duplicate("a", 20000)) == {:ok, String.duplicate("a", 20000)}
   end
 
   test "given an integer" do
@@ -33,8 +37,16 @@ defmodule CBOR.EncoderTest do
     assert reconstruct(51090942171709440000) == {:ok, 51090942171709440000}
   end
 
+  test "given an negative bignum" do
+    assert reconstruct(-51090942171709440000) == {:ok, -51090942171709440000}
+  end
+
   test "given a list with several items" do
     assert reconstruct([1,2,3,4,5,6,7,8]) == {:ok, [1,2,3,4,5,6,7,8]}
+  end
+
+  test "given an empty list" do
+    assert reconstruct([]) == {:ok, []}
   end
 
   test "given a complex nested list" do
@@ -51,6 +63,42 @@ defmodule CBOR.EncoderTest do
 
   test "given a complex nested tuple" do
     assert reconstruct({1, {2, 3}, {4, 5}}) == {:ok, [1, [2, 3], [4, 5]]}
+  end
+
+  test "given an empty  MapSet" do
+    assert reconstruct(MapSet.new()) == {:ok, []}
+  end
+
+  test "given a MapSet" do
+    assert reconstruct(MapSet.new([1,2,3])) == {:ok, [1,2,3]}
+  end
+
+  test "given a range" do
+    assert reconstruct(1..10) == {:ok, [1,2,3,4,5,6,7,8,9,10]}
+  end
+
+  test "an empty map" do
+    assert reconstruct(%{}) == {:ok, %{}}
+  end
+
+  test "a map with atom keys and values" do
+    assert reconstruct(%{foo: :bar, baz: :quux}) == {:ok, %{"foo" => "bar", "baz" => "quux"}}
+  end
+
+  test "complex maps" do
+    assert reconstruct(%{"a" => 1, "b" => [2, 3]}) == {:ok, %{"a" => 1, "b" => [2, 3]}}
+  end
+
+  test "tagged infinity" do
+    assert reconstruct(%CBOR.Tag{tag: :float, value: :inf}) == {:ok, %CBOR.Tag{tag: :float, value: :inf}}
+  end
+
+  test "tagged negative infinity" do
+    assert reconstruct(%CBOR.Tag{tag: :float, value: :"-inf"}) == {:ok, %CBOR.Tag{tag: :float, value: :"-inf"}}
+  end
+
+  test "tagged nan" do
+    assert reconstruct(%CBOR.Tag{tag: :float, value: :nan}) == {:ok, %CBOR.Tag{tag: :float, value: :nan}}
   end
 
   test "given a URI" do
@@ -84,6 +132,10 @@ defmodule CBOR.EncoderTest do
     assert reconstruct(0.1) == {:ok, 0.1}
   end
 
+  test "more complex float" do
+    assert reconstruct(123.1237987) == {:ok, 123.1237987}
+  end
+
   test "given a bignum" do
     assert reconstruct(2432902008176640000) == {:ok, 2432902008176640000}
   end
@@ -94,14 +146,6 @@ defmodule CBOR.EncoderTest do
 
   test "given a naive datetime" do
     assert reconstruct(~N[2019-07-22 17:17:40.564490]) == {:ok, ~U[2019-07-22 17:17:40.564490Z]}
-  end
-
-  test "given a range" do
-    assert reconstruct(1..10) == {:ok, [1,2,3,4,5,6,7,8,9,10]}
-  end
-
-  test "complex maps" do
-    assert reconstruct(%{"a" => 1, "b" => [2, 3]}) == {:ok, %{"a" => 1, "b" => [2, 3]}}
   end
 
   test "given a date" do
