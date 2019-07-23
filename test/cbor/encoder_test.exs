@@ -18,11 +18,19 @@ defmodule CBOR.EncoderTest do
   end
 
   test "given the value of undefined" do
-    assert reconstruct(:undefined) == {:ok, :undefined}
+    assert reconstruct(:__undefined__) == {:ok, :__undefined__}
   end
 
   test "given an empty list" do
     assert reconstruct([]) == {:ok, []}
+  end
+
+  test "given an integer" do
+    assert reconstruct(1) == {:ok, 1}
+  end
+
+  test "given an bignum" do
+    assert reconstruct(51090942171709440000) == {:ok, 51090942171709440000}
   end
 
   test "given a list with several items" do

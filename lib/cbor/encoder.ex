@@ -78,7 +78,7 @@ defimpl CBOR.Encoder, for: Integer do
   defp encode_as_bignum(i, tag, acc) do
     CBOR.Utils.encode_string(
       2,
-      Integer.to_string(i, 16),
+      :binary.encode_unsigned(i),
       CBOR.Utils.encode_head(6, tag, acc)
     )
   end
