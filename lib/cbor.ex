@@ -101,14 +101,15 @@ defmodule CBOR do
   ## Examples
 
       iex> CBOR.decode(<<130, 101, 72, 101, 108, 108, 111, 102, 87, 111, 114, 108, 100, 33>>)
-      {:ok, ["Hello", "World!"]}
+      {:ok, ["Hello", "World!"], ""}
 
       iex> CBOR.decode(<<130, 1, 130, 2, 3>>)
-      {:ok, [1, [2, 3]]}
+      {:ok, [1, [2, 3]], ""}
 
       iex> CBOR.decode(<<162, 97, 97, 1, 97, 98, 130, 2, 3>>)
-      {:ok, %{"a" => 1, "b" => [2, 3]}}
+      {:ok, %{"a" => 1, "b" => [2, 3]}, ""}
   """
+  @spec decode(binary()) :: {:ok, any(), binary()} | {:error, atom}
   def decode(binary) do
     try do
       perform_decoding(binary)
@@ -119,7 +120,7 @@ defmodule CBOR do
 
   defp perform_decoding(binary) when is_binary(binary) do
     case CBOR.Decoder.decode(binary) do
-      {value, ""} -> {:ok, value}
+      {value, rest} -> {:ok, value, rest}
       _other -> {:error, :cbor_decoder_error}
     end
   end
