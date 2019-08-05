@@ -4,8 +4,8 @@ defmodule Cbor.MixProject do
   def project do
     [
       app: :cbor,
-      version: "0.1.0",
-      elixir: "~> 1.9",
+      version: "1.0.0",
+      elixir: "~> 1.0",
       start_permanent: Mix.env() == :prod,
       description: "Implementation of RFC 7049 (Concise Binary Object Representation)",
       package: [

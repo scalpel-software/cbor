@@ -1,10 +1,26 @@
-# Cbor
+# CBOR
 
 Implementation of RFC 7049 [CBOR](http://cbor.io) (Concise Binary
 Object Representation) for Elixir.
 
 This is a fork of [excbor](https://github.com/cabo/excbor) which modernizes
 the codebase, and makes decisions on handling data types that the original library had punted on.
+
+## Migrating from the previous version
+
+This library is a fork of the no longer maintained excbor project.
+
+For those migrating from previous versions of this library there are breaking changes that you should be aware of.
+
+The module `Cbor` has been renamed to `CBOR`
+
+CBOR.decode will return a three item tuple of the form `{:ok, decoded, rest}`, instead of returning the decoded object. In the wild there are APIs that concat CBOR objects together. The `rest` variable includes any leftover information from the decoding operation in case you need to decode multiple objects.
+
+Atoms will be encoded/decoded as strings, except for the special case of `:__undefined__` which has no direct translation to elixir but has semantic meaning in CBOR.
+
+Elixir/Erlang does not have a concept of infinity, negative infinity or NaN. In order to encode or decode these values we will return a struct of the form `%CBOR.Tag{tag: :float, value: (:inf|:"-inf"|:nan)}`
+
+If you want to encode a raw binary value, you can use the `CBOR.Tag` struct with a tag of `:bytes` and the binary as the `:value` field.
 
 ## Installation
 
