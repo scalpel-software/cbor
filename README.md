@@ -48,7 +48,7 @@ iex(1)> CBOR.encode([1, [2, 3]])
 
 ```elixir
 iex(2)> CBOR.decode(<<130, 1, 130, 2, 3>>)
-{:ok, [1, [2, 3]]}
+{:ok, [1, [2, 3]], ""}
 ```
 
 ## Design Notes
