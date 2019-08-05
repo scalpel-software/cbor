@@ -24,12 +24,10 @@ If you want to encode a raw binary value, you can use the `CBOR.Tag` struct with
 
 ## Installation
 
-As of right now, this library is not available on hex, you will have to reference the github link directly. We are currently working on making this the canonical cbor library for elixir.
-
 ```elixir
 def deps do
   [
-    {:cbor, git: "https://github.com/scalpel-software/cbor.git", tag: "0.1"}
+    {:cbor, "~> 1.0.0"}
   ]
 end
 ```
