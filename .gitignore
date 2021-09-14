@@ -22,3 +22,5 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 cbor-*.tar
 
+# Temporary files, for example, from tests.
+/tmp/

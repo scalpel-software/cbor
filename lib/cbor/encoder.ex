@@ -1,5 +1,8 @@
 defprotocol CBOR.Encoder do
-  @doc "Converts an Elixir data type to its representation in CBOR"
+  @doc """
+  Converts an Elixir data type to its representation in CBOR.
+  """
+
   def encode_into(element, acc)
 end
 
