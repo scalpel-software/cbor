@@ -1,9 +1,14 @@
 defmodule CBOR.Decoder do
   def decode(binary) do
-    decode(binary, header(binary))
+    decode(binary, header(binary), &default_decode_tag/2)
   end
 
-  def decode(_binary, {mt, :indefinite, rest}) do
+  # default_decoder set by caller to decode tags without a set decode value
+  def decode(binary, decode_default) do
+    decode(binary, header(binary), decode_default)
+  end
+
+  def decode(_binary, {mt, :indefinite, rest}, _decode_default) do
     case mt do
       2 -> mark_as_bytes(decode_string_indefinite(rest, 2, []))
       3 -> decode_string_indefinite(rest, 3, [])
@@ -12,7 +17,7 @@ defmodule CBOR.Decoder do
     end
   end
 
-  def decode(bin, {mt, value, rest}) do
+  def decode(bin, {mt, value, rest}, decode_default) do
     case mt do
       0 -> {value, rest}
       1 -> {-value - 1, rest}
@@ -20,7 +25,7 @@ defmodule CBOR.Decoder do
       3 -> decode_string(rest, value)
       4 -> decode_array(value, rest)
       5 -> decode_map(value, rest)
-      6 -> decode_other(value, decode(rest))
+      6 -> decode_other(value, decode(rest), decode_default)
       7 -> decode_float(bin, value, rest)
     end
   end
@@ -125,7 +130,7 @@ defmodule CBOR.Decoder do
     end
   end
 
-  defp decode_other(value, {inner, rest}), do: {decode_tag(value, inner), rest}
+  defp decode_other(tag, {value, rest}, decode_default), do: {decode_default.(tag, value), rest}
 
   def decode_non_finite(0, 0), do: %CBOR.Tag{tag: :float, value: :inf}
   def decode_non_finite(1, 0), do: %CBOR.Tag{tag: :float, value: :"-inf"}
@@ -137,6 +142,10 @@ defmodule CBOR.Decoder do
   defp decode_half(sign, exp, mant) do
     <<value::float-size(32)>> = <<sign::size(1), exp::size(8), mant::size(10), 0::size(13)>>
     value * 5192296858534827628530496329220096.0
+  end
+
+  def default_decode_tag(tag, value) do
+    decode_tag(tag, value)
   end
 
   defp decode_tag(0, value), do: decode_datetime(value)
