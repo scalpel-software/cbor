@@ -1,31 +1,26 @@
 defmodule CBOR.Decoder do
-  def decode(binary) do
-    decode(binary, header(binary), &default_decode_tag/2)
+  def decode(binary, opts) do
+    decode(binary, header(binary), opts)
   end
 
-  # default_decoder set by caller to decode tags without a set decode value
-  def decode(binary, decode_default) do
-    decode(binary, header(binary), decode_default)
-  end
-
-  def decode(_binary, {mt, :indefinite, rest}, _decode_default) do
+  def decode(_binary, {mt, :indefinite, rest}, opts) do
     case mt do
       2 -> mark_as_bytes(decode_string_indefinite(rest, 2, []))
       3 -> decode_string_indefinite(rest, 3, [])
-      4 -> decode_array_indefinite(rest, [])
-      5 -> decode_map_indefinite(rest, %{})
+      4 -> decode_array_indefinite(rest, [], opts)
+      5 -> decode_map_indefinite(rest, %{}, opts)
     end
   end
 
-  def decode(bin, {mt, value, rest}, decode_default) do
+  def decode(bin, {mt, value, rest}, opts) do
     case mt do
       0 -> {value, rest}
       1 -> {-value - 1, rest}
       2 -> mark_as_bytes(decode_string(rest, value))
       3 -> decode_string(rest, value)
-      4 -> decode_array(value, rest)
-      5 -> decode_map(value, rest)
-      6 -> decode_other(value, decode(rest), decode_default)
+      4 -> decode_array(value, rest, opts)
+      5 -> decode_map(value, rest, opts)
+      6 -> decode_other(value, decode(rest, opts), opts)
       7 -> decode_float(bin, value, rest)
     end
   end
@@ -70,38 +65,38 @@ defmodule CBOR.Decoder do
     end
   end
 
-  defp decode_array(0, rest), do: {[], rest}
-  defp decode_array(len, rest), do: decode_array(len, [], rest)
-  defp decode_array(0, acc, bin), do: {Enum.reverse(acc), bin}
-  defp decode_array(len, acc, bin) do
-    {value, bin_rest} = decode(bin)
-    decode_array(len - 1, [value|acc], bin_rest)
+  defp decode_array(0, rest, _opts), do: {[], rest}
+  defp decode_array(len, rest, opts), do: decode_array(len, [], rest, opts)
+  defp decode_array(0, acc, bin, _opts), do: {Enum.reverse(acc), bin}
+  defp decode_array(len, acc, bin, opts) do
+    {value, bin_rest} = decode(bin, opts)
+    decode_array(len - 1, [value|acc], bin_rest, opts)
   end
 
-  defp decode_array_indefinite(<<0xff, new_rest::binary>>, acc) do
+  defp decode_array_indefinite(<<0xff, new_rest::binary>>, acc, _opts) do
     {Enum.reverse(acc), new_rest}
   end
 
-  defp decode_array_indefinite(rest, acc) do
-    {value, new_rest} = decode(rest)
-    decode_array_indefinite(new_rest, [value | acc])
+  defp decode_array_indefinite(rest, acc, opts) do
+    {value, new_rest} = decode(rest, opts)
+    decode_array_indefinite(new_rest, [value | acc], opts)
   end
 
-  defp decode_map(0, rest), do: {%{}, rest}
-  defp decode_map(len, rest), do: decode_map(len, %{}, rest)
-  defp decode_map(0, acc, bin), do: {acc, bin}
-  defp decode_map(len, acc, bin) do
-    {key, key_rest} = decode(bin)
-    {value, bin_rest} = decode(key_rest)
+  defp decode_map(0, rest, _opts), do: {%{}, rest}
+  defp decode_map(len, rest, opts), do: decode_map(len, %{}, rest, opts)
+  defp decode_map(0, acc, bin, _opts), do: {acc, bin}
+  defp decode_map(len, acc, bin, opts) do
+    {key, key_rest} = decode(bin, opts)
+    {value, bin_rest} = decode(key_rest, opts)
 
-    decode_map(len - 1, Map.put(acc, key, value), bin_rest)
+    decode_map(len - 1, Map.put(acc, key, value), bin_rest, opts)
   end
 
-  defp decode_map_indefinite(<<0xff, new_rest::binary>>, acc), do: {acc, new_rest}
-  defp decode_map_indefinite(rest, acc) do
-    {key, key_rest} = decode(rest)
-    {value, new_rest} = decode(key_rest)
-    decode_map_indefinite(new_rest, Map.put(acc, key, value))
+  defp decode_map_indefinite(<<0xff, new_rest::binary>>, acc, _opts), do: {acc, new_rest}
+  defp decode_map_indefinite(rest, acc, opts) do
+    {key, key_rest} = decode(rest, opts)
+    {value, new_rest} = decode(key_rest, opts)
+    decode_map_indefinite(new_rest, Map.put(acc, key, value), opts)
   end
 
   defp decode_float(bin, value, rest) do
@@ -130,7 +125,13 @@ defmodule CBOR.Decoder do
     end
   end
 
-  defp decode_other(tag, {value, rest}, decode_default), do: {decode_default.(tag, value), rest}
+  defp decode_other(tag, {value, rest}, opts) do
+    decoded_tag = decode_tag(tag, value)
+    case opts == [] do
+      true -> {decoded_tag, rest}
+      false -> {Keyword.get(opts, :tag_decoder).(decoded_tag), rest}
+    end
+  end
 
   def decode_non_finite(0, 0), do: %CBOR.Tag{tag: :float, value: :inf}
   def decode_non_finite(1, 0), do: %CBOR.Tag{tag: :float, value: :"-inf"}
@@ -142,10 +143,6 @@ defmodule CBOR.Decoder do
   defp decode_half(sign, exp, mant) do
     <<value::float-size(32)>> = <<sign::size(1), exp::size(8), mant::size(10), 0::size(13)>>
     value * 5192296858534827628530496329220096.0
-  end
-
-  def default_decode_tag(tag, value) do
-    decode_tag(tag, value)
   end
 
   defp decode_tag(0, value), do: decode_datetime(value)

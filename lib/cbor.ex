@@ -92,72 +92,53 @@ defmodule CBOR do
       iex> CBOR.encode(%{"a" => 1, "b" => [2, 3]})
       <<162, 97, 97, 1, 97, 98, 130, 2, 3>>
 
+      iex> CBOR.encode(%CBOR.Tag{tag: 50, value: {1, 2, %CBOR.Tag{tag: 50, value: {"nested_tuple", 1, 2}}}})
+      <<216, 50, 131, 1, 2, 216, 50, 131, 108, 110, 101, 115, 116, 101, 100, 95, 116, 117, 112, 108, 101, 1, 2>>
   """
   @spec encode(any()) :: binary()
   def encode(value), do: CBOR.Encoder.encode_into(value, <<>>)
 
   @doc """
-  Converts a CBOR encoded binary into native elixir data structures with a specified default
-  decoder function. The function added should take a tag and a value, and the caller can
-  specify how to decode the value associated to a tag input into the function.
+  Converts a CBOR encoded binary into native elixir data structures. Allows passing in a custom tag decoder that takes in a CBOR.Tag
+  struct and outputs a converted value.
 
   ## Examples
 
-      iex(1)> bin_tuple = CBOR.encode(%CBOR.Tag{tag: 50, value: {1, 2, "tuple"}})
-      <<216, 50, 131, 1, 2, 101, 116, 117, 112, 108, 101>>
+      iex> CBOR.decode(<<130, 101, 72, 101, 108, 108, 111, 102, 87, 111, 114, 108, 100, 33>>)
+      {:ok, ["Hello", "World!"], ""}
 
-      iex(2)> tuple_decoder = fn (tag, value) -> case tag, do: (50 -> List.to_tuple(value); _ -> CBOR.Decoder.default_decode_tag(tag, value)) end
-      #Function<43.65746770/2 in :erl_eval.expr/5> # Note that non-matched tags are decoded using CBOR.Decoder.default_decode_tag/2
+      iex> CBOR.decode(<<130, 1, 130, 2, 3>>)
+      {:ok, [1, [2, 3]], ""}
 
       iex> CBOR.decode(<<162, 97, 97, 1, 97, 98, 130, 2, 3>>)
       {:ok, %{"a" => 1, "b" => [2, 3]}, ""}
 
-      iex(3)> CBOR.decode(bin_tuple, tuple_decoder)
-      {:ok, {1, 2, "tuple"}, ""}
+      iex(1)> tuple_decoder = fn(tag_struct) -> case tag_struct.tag, do: (50 -> List.to_tuple(tag_struct.value); _ -> tag_struct) end
+      iex(2)> CBOR.decode(<<216, 50, 131, 1, 2, 216, 50, 131, 108, 110, 101, 115, 116, 101, 100, 95, 116, 117, 112, 108, 101, 1, 2>>, tag_decoder: tuple_decoder)
+      {:ok, {1, 2, {"nested_tuple", 1, 2}}, ""}
 
-      iex(4)> bin_non_tuple = CBOR.encode(%CBOR.Tag{tag: 123, value: "Hello, World!"})
-      <<216, 123, 109, 72, 101, 108, 108, 111, 44, 32, 87, 111, 114, 108, 100, 33>>
-
-      iex(5)> CBOR.decode(bin_non_tuple, tuple_decoder)
-      {:ok, %CBOR.Tag{tag: 123, value: "Hello, World!"}, ""}
+      iex> CBOR.decode(<<216, 50, 131, 1, 2, 216, 50, 131, 108, 110, 101, 115, 116, 101, 100, 95, 116, 117, 112, 108, 101, 1, 2>>)
+      {:ok,
+      %CBOR.Tag{
+        tag: 50,
+        value: [1, 2, %CBOR.Tag{tag: 50, value: ["nested_tuple", 1, 2]}]
+      }, ""}
   """
   @spec decode(binary()) :: {:ok, any(), binary()} | {:error, atom}
-  def decode(binary) do
+  def decode(binary, opts \\ []) do
     try do
-      perform_decoding(binary)
+      perform_decoding(binary, opts)
     rescue
       FunctionClauseError -> {:error, :cbor_function_clause_error}
     end
   end
 
-  @doc """
-  Converts a CBOR encoded binary into native elixir data structures
-
-  """
-  @spec decode(binary(), fun()) :: {:ok, any(), binary()} | {:error, atom}
-  def decode(binary, default_decode) do
-    try do
-      perform_decoding(binary, default_decode)
-    rescue
-      FunctionClauseError -> {:error, :cbor_function_clause_error}
-    end
-  end
-
-  defp perform_decoding(binary) when is_binary(binary) do
-    case CBOR.Decoder.decode(binary) do
+  defp perform_decoding(binary, opts) when is_binary(binary) do
+    case CBOR.Decoder.decode(binary, opts) do
       {value, rest} -> {:ok, value, rest}
       _other -> {:error, :cbor_decoder_error}
     end
   end
 
-  defp perform_decoding(_value), do: {:error, :cannot_decode_non_binary_values}
-
-  defp perform_decoding(binary, default_decode) when is_binary(binary) do
-    case CBOR.Decoder.decode(binary, default_decode) do
-      {value, rest} -> {:ok, value, rest}
-      _other -> {:error, :cbor_decoder_error}
-    end
-  end
-
-  defp perform_decoding(_value, _function), do: {:error, :cannot_decode_non_binary_values}
+  defp perform_decoding(_value, _opts), do: {:error, :cannot_decode_non_binary_values}
 end
