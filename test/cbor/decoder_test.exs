@@ -426,4 +426,9 @@ defmodule CBOR.DecoderTest do
     encoded = <<191, 99, 70, 117, 110, 245, 99, 65, 109, 116, 33, 255>>
     assert CBOR.decode(encoded) == {:ok, %{"Fun" => true, "Amt" => -2}, ""}
   end
+
+  test "receiving a MatchError" do 
+    encoded = "You done goofed"
+    assert CBOR.decode(encoded) == {:error, :cbor_match_error}
+  end
 end
