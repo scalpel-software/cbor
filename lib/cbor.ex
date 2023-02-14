@@ -117,6 +117,7 @@ defmodule CBOR do
       perform_decoding(binary)
     rescue
       FunctionClauseError -> {:error, :cbor_function_clause_error}
+      MatchError -> {:error, :cbor_match_error}
     end
   end
 
