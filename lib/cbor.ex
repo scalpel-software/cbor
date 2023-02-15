@@ -92,12 +92,15 @@ defmodule CBOR do
       iex> CBOR.encode(%{"a" => 1, "b" => [2, 3]})
       <<162, 97, 97, 1, 97, 98, 130, 2, 3>>
 
+      iex> CBOR.encode(%CBOR.Tag{tag: 50, value: {1, 2, %CBOR.Tag{tag: 50, value: {"nested_tuple", 1, 2}}}})
+      <<216, 50, 131, 1, 2, 216, 50, 131, 108, 110, 101, 115, 116, 101, 100, 95, 116, 117, 112, 108, 101, 1, 2>>
   """
   @spec encode(any()) :: binary()
   def encode(value), do: CBOR.Encoder.encode_into(value, <<>>)
 
   @doc """
-  Converts a CBOR encoded binary into native elixir data structures
+  Converts a CBOR encoded binary into native elixir data structures. Allows passing in a custom tag decoder that takes in a CBOR.Tag
+  struct and outputs a converted value.
 
   ## Examples
 
@@ -110,23 +113,33 @@ defmodule CBOR do
       iex> CBOR.decode(<<162, 97, 97, 1, 97, 98, 130, 2, 3>>)
       {:ok, %{"a" => 1, "b" => [2, 3]}, ""}
 
+      iex(1)> tuple_decoder = fn(tag_struct) -> case tag_struct.tag, do: (50 -> List.to_tuple(tag_struct.value); _ -> tag_struct) end
+      iex(2)> CBOR.decode(<<216, 50, 131, 1, 2, 216, 50, 131, 108, 110, 101, 115, 116, 101, 100, 95, 116, 117, 112, 108, 101, 1, 2>>, tag_decoder: tuple_decoder)
+      {:ok, {1, 2, {"nested_tuple", 1, 2}}, ""}
+
+      iex> CBOR.decode(<<216, 50, 131, 1, 2, 216, 50, 131, 108, 110, 101, 115, 116, 101, 100, 95, 116, 117, 112, 108, 101, 1, 2>>)
+      {:ok,
+      %CBOR.Tag{
+        tag: 50,
+        value: [1, 2, %CBOR.Tag{tag: 50, value: ["nested_tuple", 1, 2]}]
+      }, ""}
   """
   @spec decode(binary()) :: {:ok, any(), binary()} | {:error, atom}
-  def decode(binary) do
+  def decode(binary, opts \\ []) do
     try do
-      perform_decoding(binary)
+      perform_decoding(binary, opts)
     rescue
       FunctionClauseError -> {:error, :cbor_function_clause_error}
       MatchError -> {:error, :cbor_match_error}
     end
   end
 
-  defp perform_decoding(binary) when is_binary(binary) do
-    case CBOR.Decoder.decode(binary) do
+  defp perform_decoding(binary, opts) when is_binary(binary) do
+    case CBOR.Decoder.decode(binary, opts) do
       {value, rest} -> {:ok, value, rest}
       _other -> {:error, :cbor_decoder_error}
     end
   end
 
-  defp perform_decoding(_value), do: {:error, :cannot_decode_non_binary_values}
+  defp perform_decoding(_value, _opts), do: {:error, :cannot_decode_non_binary_values}
 end
