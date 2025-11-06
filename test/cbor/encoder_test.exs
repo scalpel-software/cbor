@@ -1,8 +1,9 @@
 defmodule CBOR.EncoderTest do
   use ExUnit.Case, async: true
 
-  defp reconstruct(value) do
-    value |> CBOR.encode() |> CBOR.decode()
+  defp reconstruct(value, ordered \\ :unordered)
+  defp reconstruct(value, ordered) do
+    value |> CBOR.encode() |> CBOR.decode(ordered)
   end
 
   test "given the value of true" do
@@ -79,14 +80,20 @@ defmodule CBOR.EncoderTest do
 
   test "an empty map" do
     assert reconstruct(%{}) == {:ok, %{}, ""}
+    assert reconstruct(%OrdMap{tuples: []}, :ordered) == {:ok, %OrdMap{tuples: []}, ""}
   end
 
   test "a map with atom keys and values" do
     assert reconstruct(%{foo: :bar, baz: :quux}) == {:ok, %{"foo" => "bar", "baz" => "quux"}, ""}
+    assert reconstruct(%OrdMap{tuples: [{:foo, :bar}, {:baz, :quux}]}, :ordered) == 
+      {:ok, %OrdMap{tuples: [{"foo", "bar"}, {"baz", "quux"}]}, ""}
   end
 
   test "complex maps" do
     assert reconstruct(%{"a" => 1, "b" => [2, 3]}) == {:ok, %{"a" => 1, "b" => [2, 3]}, ""}
+
+    our_ordmap = %OrdMap{tuples: [{"a", 1}, {"b", [2, 3]}]}
+    assert reconstruct(our_ordmap, :ordered) == {:ok, our_ordmap, ""}
   end
 
   test "tagged infinity" do

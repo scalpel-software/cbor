@@ -1,26 +1,32 @@
 defmodule CBOR.Decoder do
-  def decode(binary) do
-    decode(binary, header(binary))
+  def decode(binary, is_ordered? \\ :unordered)
+  def decode(binary, is_ordered?) do
+    decode(binary, header(binary), is_ordered?)
   end
 
-  def decode(_binary, {mt, :indefinite, rest}) do
+  def decode(_binary, {mt, :indefinite, rest}, is_ordered?) do
     case mt do
       2 -> mark_as_bytes(decode_string_indefinite(rest, 2, []))
       3 -> decode_string_indefinite(rest, 3, [])
-      4 -> decode_array_indefinite(rest, [])
-      5 -> decode_map_indefinite(rest, %{})
+      4 -> decode_array_indefinite(rest, [], is_ordered?)
+      5 -> case is_ordered? do 
+          :ordered -> decode_map_indefinite(rest, OrdMap.new([]), is_ordered?)
+          :unordered -> decode_map_indefinite(rest, %{}, is_ordered?)
+        end
     end
   end
-
-  def decode(bin, {mt, value, rest}) do
+  def decode(bin, {mt, value, rest}, is_ordered?) do
     case mt do
       0 -> {value, rest}
       1 -> {-value - 1, rest}
       2 -> mark_as_bytes(decode_string(rest, value))
       3 -> decode_string(rest, value)
-      4 -> decode_array(value, rest)
-      5 -> decode_map(value, rest)
-      6 -> decode_other(value, decode(rest))
+      4 -> decode_array(value, rest, is_ordered?)
+      5 -> case is_ordered? do
+          :ordered -> decode_ordmap(value, rest)
+          :unordered -> decode_map(value, rest)
+        end
+      6 -> decode_other(value, decode(rest, is_ordered?))
       7 -> decode_float(bin, value, rest)
     end
   end
@@ -65,38 +71,53 @@ defmodule CBOR.Decoder do
     end
   end
 
-  defp decode_array(0, rest), do: {[], rest}
-  defp decode_array(len, rest), do: decode_array(len, [], rest)
-  defp decode_array(0, acc, bin), do: {Enum.reverse(acc), bin}
-  defp decode_array(len, acc, bin) do
-    {value, bin_rest} = decode(bin)
-    decode_array(len - 1, [value|acc], bin_rest)
+  defp decode_array(len, rest, is_ordered?)
+  defp decode_array(0, rest, _is_ordered?), do: {[], rest}
+  defp decode_array(len, rest, is_ordered?), do: decode_array(len, [], rest, is_ordered?)
+
+  defp decode_array(0, acc, bin, _is_ordered?), do: {Enum.reverse(acc), bin}
+  defp decode_array(len, acc, bin, is_ordered?) do
+    {value, bin_rest} = decode(bin, is_ordered?)
+    decode_array(len - 1, [value|acc], bin_rest, is_ordered?)
   end
 
-  defp decode_array_indefinite(<<0xff, new_rest::binary>>, acc) do
+  defp decode_array_indefinite(<<0xff, new_rest::binary>>, acc, _is_ordered?) do
     {Enum.reverse(acc), new_rest}
   end
-
-  defp decode_array_indefinite(rest, acc) do
-    {value, new_rest} = decode(rest)
-    decode_array_indefinite(new_rest, [value | acc])
+  defp decode_array_indefinite(rest, acc, is_ordered?) do
+    {value, new_rest} = decode(rest, is_ordered?)
+    decode_array_indefinite(new_rest, [value | acc], is_ordered?)
   end
 
   defp decode_map(0, rest), do: {%{}, rest}
   defp decode_map(len, rest), do: decode_map(len, %{}, rest)
   defp decode_map(0, acc, bin), do: {acc, bin}
   defp decode_map(len, acc, bin) do
-    {key, key_rest} = decode(bin)
-    {value, bin_rest} = decode(key_rest)
+    {key, key_rest} = decode(bin, :unordered)
+    {value, bin_rest} = decode(key_rest, :unordered)
 
     decode_map(len - 1, Map.put(acc, key, value), bin_rest)
   end
 
-  defp decode_map_indefinite(<<0xff, new_rest::binary>>, acc), do: {acc, new_rest}
-  defp decode_map_indefinite(rest, acc) do
-    {key, key_rest} = decode(rest)
-    {value, new_rest} = decode(key_rest)
-    decode_map_indefinite(new_rest, Map.put(acc, key, value))
+  defp decode_ordmap(0, rest), do: {OrdMap.new([]), rest}
+  defp decode_ordmap(len, rest), do: decode_ordmap(len, OrdMap.new([]), rest)
+  defp decode_ordmap(0, acc, bin), do: {acc, bin}
+  defp decode_ordmap(len, acc, bin) do
+    {key, key_rest} = decode(bin, :ordered)
+    {value, bin_rest} = decode(key_rest, :ordered)
+
+    decode_ordmap(len - 1, OrdMap.put(acc, key, value), bin_rest)
+  end
+
+  defp decode_map_indefinite(<<0xff, new_rest::binary>>, acc, _is_ordered?), do: {acc, new_rest}
+  defp decode_map_indefinite(rest, acc, is_ordered?) do
+    {key, key_rest} = decode(rest, is_ordered?)
+    {value, new_rest} = decode(key_rest, is_ordered?)
+    new_map = case is_ordered? do
+      :ordered -> OrdMap.put(acc, key, value)
+      :unordered -> Map.put(acc, key, value)
+    end
+    decode_map_indefinite(new_rest, new_map, is_ordered?)
   end
 
   defp decode_float(bin, value, rest) do

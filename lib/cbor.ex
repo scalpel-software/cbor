@@ -92,6 +92,9 @@ defmodule CBOR do
       iex> CBOR.encode(%{"a" => 1, "b" => [2, 3]})
       <<162, 97, 97, 1, 97, 98, 130, 2, 3>>
 
+      iex> CBOR.encode(%OrdMap{tuples: [{"a", 1}, {"b", [2, 3]}]})
+      <<162, 97, 97, 1, 97, 98, 130, 2, 3>>
+
   """
   @spec encode(any()) :: binary()
   def encode(value), do: CBOR.Encoder.encode_into(value, <<>>)
@@ -99,7 +102,7 @@ defmodule CBOR do
   @doc """
   Converts a CBOR encoded binary into native elixir data structures
 
-  ## Examples
+  ## Examples vanilla elixir maps
 
       iex> CBOR.decode(<<130, 101, 72, 101, 108, 108, 111, 102, 87, 111, 114, 108, 100, 33>>)
       {:ok, ["Hello", "World!"], ""}
@@ -109,24 +112,52 @@ defmodule CBOR do
 
       iex> CBOR.decode(<<162, 97, 97, 1, 97, 98, 130, 2, 3>>)
       {:ok, %{"a" => 1, "b" => [2, 3]}, ""}
+      
+      iex> CBOR.decode(<<130, 101, 72, 101, 108, 108, 111, 102, 87, 111, 114, 108, 100, 33>>, :unordered)
+      {:ok, ["Hello", "World!"], ""}
+
+      iex> CBOR.decode(<<130, 1, 130, 2, 3>>, :unordered)
+      {:ok, [1, [2, 3]], ""}
+
+      iex> CBOR.decode(<<162, 97, 97, 1, 97, 98, 130, 2, 3>>, :unordered)
+      {:ok, %{"a" => 1, "b" => [2, 3]}, ""}
+
+  ## Ordered Maps
+  
+      iex> CBOR.decode(<<130, 101, 72, 101, 108, 108, 111, 102, 87, 111, 114, 108, 100, 33>>, :ordered)
+      {:ok, ["Hello", "World!"], ""}
+
+      iex> CBOR.decode(<<130, 1, 130, 2, 3>>, :ordered)
+      {:ok, [1, [2, 3]], ""}
+
+      iex> CBOR.decode(<<162, 97, 97, 1, 97, 98, 130, 2, 3>>, :ordered)
+      {:ok, %OrdMap{tuples: [{"a", 1}, {"b", [2, 3]}]}, ""}
 
   """
-  @spec decode(binary()) :: {:ok, any(), binary()} | {:error, atom}
-  def decode(binary) do
+  @spec decode(binary(), :ordered | :unordered) :: {:ok, any(), binary()} | {:error, atom}
+  def decode(binary, is_ordered? \\ :unordered)
+  def decode(binary, is_ordered?) when is_ordered? in [:ordered, :unordered] do
     try do
-      perform_decoding(binary)
+      perform_decoding(binary, is_ordered?)
     rescue
       FunctionClauseError -> {:error, :cbor_function_clause_error}
       MatchError -> {:error, :cbor_match_error}
     end
   end
 
-  defp perform_decoding(binary) when is_binary(binary) do
-    case CBOR.Decoder.decode(binary) do
+  defp perform_decoding(binary, is_ordered?) 
+    when is_binary(binary) and is_ordered? in [:ordered, :unordered] 
+  do
+    case CBOR.Decoder.decode(binary, is_ordered?) do
       {value, rest} -> {:ok, value, rest}
       _other -> {:error, :cbor_decoder_error}
     end
   end
 
-  defp perform_decoding(_value), do: {:error, :cannot_decode_non_binary_values}
+  defp perform_decoding(_value, is_ordered?)
+    when is_ordered? not in [:ordered, :unordered]
+  do 
+      {:error, :is_ordered_must_be_ordered_or_unordered}
+  end
+  defp perform_decoding(_value, _is_ordered?), do: {:error, :cannot_decode_non_binary_values}
 end

@@ -119,6 +119,22 @@ defimpl CBOR.Encoder, for: Map do
   end
 end
 
+defimpl CBOR.Encoder, for: OrdMap do
+  def encode_into(%OrdMap{tuples: []}, acc), do: <<acc::binary, 0xa0>>
+
+  def encode_into(%OrdMap{tuples: tuples} = map, acc) when length(tuples) < 0x10000000000000000 do
+    Enum.reduce(map, CBOR.Utils.encode_head(5, length(tuples), acc), fn({k, v}, subacc) ->
+      CBOR.Encoder.encode_into(v, CBOR.Encoder.encode_into(k, subacc))
+    end)
+  end
+
+  def encode_into(map, acc) do
+    Enum.reduce(map, <<acc::binary, 0xbf>>, fn({k, v}, subacc) ->
+      CBOR.Encoder.encode_into(v, CBOR.Encoder.encode_into(k, subacc))
+    end) <> <<0xff>>
+  end
+end
+
 # We convert MapSets into lists since there is no 'set' representation
 defimpl CBOR.Encoder, for: MapSet do
   def encode_into(map_set, acc) do
