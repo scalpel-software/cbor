@@ -431,4 +431,9 @@ defmodule CBOR.DecoderTest do
     encoded = "You done goofed"
     assert CBOR.decode(encoded) == {:error, :cbor_match_error}
   end
+
+  test "receiving a CaseClauseError" do
+    encoded = <<0xFF>>
+    assert CBOR.decode(encoded) == {:error, :cbor_case_clause_error}
+  end
 end
