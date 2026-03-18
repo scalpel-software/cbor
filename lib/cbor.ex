@@ -118,6 +118,7 @@ defmodule CBOR do
     rescue
       FunctionClauseError -> {:error, :cbor_function_clause_error}
       MatchError -> {:error, :cbor_match_error}
+      CaseClauseError -> {:error, :cbor_case_clause_error}
     end
   end
 
