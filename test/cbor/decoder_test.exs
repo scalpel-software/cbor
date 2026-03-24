@@ -8,7 +8,7 @@ defmodule CBOR.DecoderTest do
 
   test "too little data" do
     assert_raise(FunctionClauseError, fn ->
-      CBOR.Decoder.decode("") == 1
+      CBOR.Decoder.decode("", []) == 1
     end)
   end
 

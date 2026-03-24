@@ -99,6 +99,41 @@ defimpl CBOR.Encoder, for: Money do
 end
 ```
 
+## Custom Decoding
+
+If you want to decode something that is not supported out of the box you can add a custom tag decoder function with the `tag_decoder` option into `CBOR.decode/1`. The function should take in a `CBOR.Tag` struct and convert the value based on the tag. An example for decoding Tuples and Atoms with a custom tags is shown below.
+
+```elixir
+# Tag 50 represents Tuples, tag 51 represents Atoms. Tag numbers chosen arbitrarily.
+defmodule TupleDecoder do
+  def tag_decoder(tag_struct) do
+    case tag_struct.tag do
+      50 ->
+        List.to_tuple(tag_struct.value)
+      51 ->
+        String.to_atom(tag_struct.value)
+      _ ->
+        tag_struct
+    end
+  end
+end
+
+iex(1)> bin_tuple = CBOR.encode(%CBOR.Tag{tag: 50, value: {%CBOR.Tag{tag: 51, value: "atom"}, %CBOR.Tag{tag: 50, value: {"nested_tuple", 1, 2}}}})
+
+iex(2)> CBOR.decode(bin_tuple, tag_decoder: TupleDecoder.tag_decoder)
+{:ok, {:atom, {"nested_tuple", 1, 2}}, ""}
+
+iex(3)> CBOR.decode(bin_tuple)
+{:ok,
+ %CBOR.Tag{
+   tag: 50,
+   value: [
+     %CBOR.Tag{tag: 51, value: "atom"},
+     %CBOR.Tag{tag: 50, value: ["nested_tuple", 1, 2]}
+   ]
+ }, ""}
+```
+
 ### Documentation
 
 Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
