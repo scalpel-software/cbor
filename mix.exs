@@ -1,4 +1,4 @@
-defmodule Cbor.MixProject do
+defmodule CBOR.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/scalpel-software/cbor"
