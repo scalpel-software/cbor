@@ -42,6 +42,11 @@ defmodule CBOR.TagDecoders.EncodedCBOR do
   def tag_number, do: 24
 
   @impl true
+  @doc """
+  Convenience entry point equivalent to `decode(value, [])`. Used by
+  `CBOR.decode/2` when no per-call options need to be threaded; runs
+  the inner decode with default options.
+  """
   def decode(value), do: decode(value, [])
 
   @impl true
