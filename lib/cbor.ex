@@ -92,6 +92,20 @@ defmodule CBOR do
       iex> CBOR.encode(%{"a" => 1, "b" => [2, 3]})
       <<162, 97, 97, 1, 97, 98, 130, 2, 3>>
 
+  ## Raises
+
+  - `Protocol.UndefinedError` if no `CBOR.Encoder` implementation exists
+    for the term's type (typically a custom struct). Add
+    `defimpl CBOR.Encoder, for: MyStruct` to teach the encoder.
+  - `ArgumentError` for wire-malformedness defenses:
+    - Map with two keys that encode to identical bytes (RFC 8949 §5.6).
+      `:foo`/`"foo"`, `{1,2}`/`[1,2]`, etc. encode identically and are
+      rejected after the deterministic key sort. The error message
+      names both colliding Elixir keys so the input bug can be fixed
+      at the call site.
+    - `%CBOR.Tag{tag: :simple, value: v}` with `v` in `24..31` —
+      reserved per RFC 8949 §3.3 (Appendix F subkind 2).
+
   """
   @spec encode(any()) :: binary()
   def encode(value), do: CBOR.Encoder.encode_into(value, <<>>)
@@ -110,24 +124,172 @@ defmodule CBOR do
       iex> CBOR.decode(<<162, 97, 97, 1, 97, 98, 130, 2, 3>>)
       {:ok, %{"a" => 1, "b" => [2, 3]}, ""}
 
+  Malformed input returns a typed error per `t:decode_error/0`:
+
+      iex> CBOR.decode(<<>>)
+      {:error, {:not_well_formed, :malformed_header}}
+
   """
-  @spec decode(binary()) :: {:ok, any(), binary()} | {:error, atom}
-  def decode(binary) do
-    try do
-      perform_decoding(binary)
-    rescue
-      FunctionClauseError -> {:error, :cbor_function_clause_error}
-      MatchError -> {:error, :cbor_match_error}
-      CaseClauseError -> {:error, :cbor_case_clause_error}
-    end
+  @typedoc """
+  Reasons emitted with `{:not_well_formed, _}`. RFC 8949 App. F well-formedness
+  violations and the three BEAM-class catch-alls (`:malformed_header`,
+  `:truncated`, `:malformed`) the public rescue translates from internal
+  parser exceptions.
+  """
+  @type not_well_formed_reason ::
+          :malformed_header
+          | :truncated
+          | :malformed
+          | :indefinite_length_not_allowed
+          | :stray_break_code
+          | :nested_indefinite_string
+          | :reserved_simple_value_form
+
+  @typedoc """
+  Reasons emitted with `{:invalid_tag, tag, _}` for built-in tag content
+  validation failures. The `{:not_well_formed, _}` variant nests the
+  inner reason for tag 24 strict-mode validation, where the outer tag's
+  spec violation is "byte string did not contain well-formed CBOR".
+  """
+  @type invalid_tag_reason ::
+          :non_byte_string_content
+          | :not_uri_reference
+          | :trailing_bytes_in_tag_24
+          | {:not_well_formed, not_well_formed_reason()}
+
+  @typedoc """
+  Shape of the third element in `{:tag_decoder_raised, tag, _}`. A user
+  `CBOR.TagDecoder` that raises, throws, exits, or returns a non-conforming
+  value is wrapped in one of these four forms.
+  """
+  @type tag_decoder_raised_reason ::
+          {:raise, Exception.t()}
+          | {:throw, term()}
+          | {:exit, term()}
+          | {:bad_return, term()}
+
+  @typedoc """
+  Error reasons returned by `decode/1` and `decode/2`.
+  """
+  @type decode_error ::
+          :cannot_decode_non_binary_values
+          | {:duplicate_key, term()}
+          | {:not_well_formed, not_well_formed_reason()}
+          | {:invalid_tag, non_neg_integer(), invalid_tag_reason()}
+          | {:tag_decoder_raised, non_neg_integer(), tag_decoder_raised_reason()}
+          | {:tag_decoder_failed, non_neg_integer(), term()}
+          | {:max_depth_exceeded, non_neg_integer()}
+
+  @spec decode(binary()) :: {:ok, term(), binary()} | {:error, decode_error()}
+  @spec decode(binary(), keyword()) :: {:ok, term(), binary()} | {:error, decode_error()}
+  def decode(binary, opts \\ []) do
+    perform_decoding(binary, opts)
+  rescue
+    # `header/1` had no clause that matched — empty input, or reserved
+    # additional-info values 28-30.
+    FunctionClauseError -> {:error, {:not_well_formed, :malformed_header}}
+    # `<<value::binary-size(len), …>> = rest` failed: the declared length
+    # overran the available bytes.
+    MatchError -> {:error, {:not_well_formed, :truncated}}
+    # Catch-all for shapes the parser doesn't accept (lenient indefinite
+    # on mt 0/1/6/7, stray break code, lenient tag 2 with non-byte content).
+    CaseClauseError -> {:error, {:not_well_formed, :malformed}}
   end
 
-  defp perform_decoding(binary) when is_binary(binary) do
-    case CBOR.Decoder.decode(binary) do
-      {value, rest} -> {:ok, value, rest}
-      _other -> {:error, :cbor_decoder_error}
-    end
+  defp perform_decoding(binary, opts) when is_binary(binary) do
+    {value, rest} = CBOR.Decoder.decode(binary, opts)
+    {:ok, value, rest}
+  catch
+    {:cbor_duplicate_key, key} -> {:error, {:duplicate_key, key}}
+    {:cbor_not_well_formed, reason} -> {:error, {:not_well_formed, reason}}
+    {:cbor_invalid_tag, tag, reason} -> {:error, {:invalid_tag, tag, reason}}
+    {:cbor_tag_decoder_raised, tag, reason} -> {:error, {:tag_decoder_raised, tag, reason}}
+    {:cbor_tag_decoder_failed, tag, reason} -> {:error, {:tag_decoder_failed, tag, reason}}
+    {:cbor_max_depth_exceeded, max} -> {:error, {:max_depth_exceeded, max}}
   end
 
-  defp perform_decoding(_value), do: {:error, :cannot_decode_non_binary_values}
+  defp perform_decoding(_value, _opts), do: {:error, :cannot_decode_non_binary_values}
+
+  @doc """
+  Renders a `decode_error()` term as a human-readable message suitable for
+  logging, error reporting, or surfacing to operators.
+
+  ## Examples
+
+      iex> CBOR.format_error({:not_well_formed, :truncated})
+      "CBOR input ended mid-data-item (truncated)"
+
+      iex> CBOR.format_error({:max_depth_exceeded, 256})
+      "CBOR nesting exceeded the configured :max_depth of 256"
+
+      iex> CBOR.format_error({:invalid_tag, 2, :non_byte_string_content})
+      "CBOR tag 2 content was not a byte string (RFC 8949 §3.4.3)"
+
+  """
+  @spec format_error(decode_error()) :: String.t()
+  def format_error(:cannot_decode_non_binary_values), do: "CBOR.decode/2 expects a binary input"
+
+  def format_error({:duplicate_key, key}),
+    do: "CBOR map contained a duplicate key (option `on_duplicate_key: :error`): #{inspect(key)}"
+
+  def format_error({:not_well_formed, reason}), do: "CBOR input " <> not_well_formed_message(reason)
+
+  def format_error({:invalid_tag, 24, :non_byte_string_content}),
+    do: "CBOR tag 24 content was not a byte string (RFC 8949 §3.4.5.1)"
+
+  def format_error({:invalid_tag, 24, :trailing_bytes_in_tag_24}),
+    do: "CBOR tag 24 byte string had trailing bytes after the inner data item (RFC 8949 §3.4.5.1)"
+
+  def format_error({:invalid_tag, 24, {:not_well_formed, reason}}),
+    do: "CBOR tag 24 inner content was not well-formed CBOR (RFC 8949 §3.4.5.1): " <> not_well_formed_message(reason)
+
+  def format_error({:invalid_tag, 24, inner}) when is_tuple(inner),
+    do: "CBOR tag 24 inner decode failed (RFC 8949 §3.4.5.1): " <> format_error(inner)
+
+  def format_error({:invalid_tag, tag, :non_byte_string_content}),
+    do: "CBOR tag #{tag} content was not a byte string (RFC 8949 §3.4.3)"
+
+  def format_error({:invalid_tag, tag, :not_uri_reference}),
+    do: "CBOR tag #{tag} content was not a valid URI reference (RFC 8949 §3.4.5.3)"
+
+  def format_error({:tag_decoder_raised, tag, {:raise, exception}}),
+    do: "CBOR tag #{tag} decoder raised #{inspect(exception.__struct__)}: #{Exception.message(exception)}"
+
+  def format_error({:tag_decoder_raised, tag, {:throw, payload}}),
+    do: "CBOR tag #{tag} decoder threw: #{inspect(payload)}"
+
+  def format_error({:tag_decoder_raised, tag, {:exit, payload}}),
+    do: "CBOR tag #{tag} decoder exited: #{inspect(payload)}"
+
+  def format_error({:tag_decoder_raised, tag, {:bad_return, value}}),
+    do: "CBOR tag #{tag} decoder returned a non-conforming value: #{inspect(value)}"
+
+  def format_error({:tag_decoder_failed, tag, reason}), do: "CBOR tag #{tag} decoder reported failure: #{inspect(reason)}"
+
+  def format_error({:max_depth_exceeded, limit}), do: "CBOR nesting exceeded the configured :max_depth of #{limit}"
+
+  # Defensive fallback for forward compatibility — if a future error reason
+  # ships without a matching clause, callers still get a non-empty message
+  # rather than a FunctionClauseError. Dialyzer covers the typed case via
+  # the @spec above.
+  def format_error(other), do: "CBOR error: #{inspect(other)}"
+
+  defp not_well_formed_message(:malformed_header),
+    do: "had a malformed initial byte (empty input or reserved additional-info value)"
+
+  defp not_well_formed_message(:truncated), do: "ended mid-data-item (truncated)"
+
+  defp not_well_formed_message(:malformed), do: "was not well-formed CBOR"
+
+  defp not_well_formed_message(:indefinite_length_not_allowed),
+    do: "used the indefinite-length form on a major type that disallows it (RFC 8949 App. F subkind 5)"
+
+  defp not_well_formed_message(:stray_break_code),
+    do: "contained a stray break code at a position expecting a data item (RFC 8949 App. F subkind 4)"
+
+  defp not_well_formed_message(:nested_indefinite_string),
+    do: "nested an indefinite-length string chunk inside an indefinite-length string (RFC 8949 §3.2.3)"
+
+  defp not_well_formed_message(:reserved_simple_value_form),
+    do: "used the reserved two-byte simple-value form for v < 32 (RFC 8949 §3.3)"
 end
