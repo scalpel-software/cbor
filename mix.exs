@@ -33,6 +33,7 @@ defmodule Cbor.MixProject do
       {:doctor, "~> 0.22.0", only: :dev},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:styler, "~> 1.11", only: [:dev, :test], runtime: false},
+      {:benchee, "~> 1.3", only: :dev},
       {:stream_data, "~> 1.0", only: [:test], runtime: false}
     ]
   end
