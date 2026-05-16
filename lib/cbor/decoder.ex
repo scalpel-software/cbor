@@ -184,7 +184,7 @@ defmodule CBOR.Decoder do
   end
 
   defp decode_string(rest, len) do
-    <<value::binary-size(len), new_rest::binary>> = rest
+    <<value::binary-size(^len), new_rest::binary>> = rest
     {value, new_rest}
   end
 
@@ -199,7 +199,7 @@ defmodule CBOR.Decoder do
         throw({:cbor_not_well_formed, :nested_indefinite_string})
 
       {^actmt, len, mid_rest} when is_integer(len) ->
-        <<value::binary-size(len), new_rest::binary>> = mid_rest
+        <<value::binary-size(^len), new_rest::binary>> = mid_rest
         decode_string_indefinite(new_rest, actmt, [value | acc])
     end
   end
@@ -493,7 +493,7 @@ defmodule CBOR.Decoder do
 
   defp bignum_from_bytes(bytes) do
     size = byte_size(bytes)
-    <<res::unsigned-integer-size(size)-unit(8)>> = bytes
+    <<res::unsigned-integer-size(^size)-unit(8)>> = bytes
     res
   end
 
