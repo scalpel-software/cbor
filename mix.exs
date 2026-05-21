@@ -1,18 +1,22 @@
-defmodule Cbor.MixProject do
+defmodule CBOR.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/scalpel-software/cbor"
-  @version "1.0.2"
+  @version "2.0.0-rc1"
 
   def project do
     [
       app: :cbor,
       version: @version,
-      elixir: "~> 1.0",
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
-      docs: docs()
+      docs: docs(),
+      dialyzer: [
+        plt_add_apps: [:mix, :ex_unit],
+        flags: [:error_handling, :extra_return, :missing_return, :underspecs]
+      ]
     ]
   end
 
@@ -24,13 +28,19 @@ defmodule Cbor.MixProject do
 
   defp deps do
     [
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:credo, "~> 1.7.18", only: [:dev, :test], runtime: false},
+      {:doctor, "~> 0.22.0", only: :dev},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:styler, "~> 1.11", only: [:dev, :test], runtime: false},
+      {:benchee, "~> 1.3", only: :dev},
+      {:stream_data, "~> 1.0", only: [:test], runtime: false}
     ]
   end
 
   defp package do
     [
-      description: "Implementation of RFC 7049 (Concise Binary Object Representation)",
+      description: "Implementation of RFC 8949 (Concise Binary Object Representation)",
       maintainers: ["tomciopp"],
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url}
@@ -45,7 +55,7 @@ defmodule Cbor.MixProject do
       ],
       main: "readme",
       source_url: @source_url,
-      source_ref: "#v{@version}",
+      source_ref: "v#{@version}",
       formatters: ["html"]
     ]
   end
