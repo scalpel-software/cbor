@@ -50,7 +50,7 @@ defmodule CBOR.Decoder do
   end
 
   defp decode_string(rest, len) do
-    <<value::binary-size(len), new_rest::binary>> = rest
+    <<value::binary-size(^len), new_rest::binary>> = rest
     {value, new_rest}
   end
 
@@ -60,7 +60,7 @@ defmodule CBOR.Decoder do
         {Enum.join(Enum.reverse(acc)), new_rest}
 
       {^actmt, len, mid_rest} ->
-        <<value::binary-size(len), new_rest::binary>> = mid_rest
+        <<value::binary-size(^len), new_rest::binary>> = mid_rest
         decode_string_indefinite(new_rest, actmt, [value | acc])
     end
   end
@@ -147,12 +147,12 @@ defmodule CBOR.Decoder do
     case value do
       %CBOR.Tag{tag: :bytes, value: bytes} when is_binary(bytes) ->
         size = byte_size(bytes)
-        <<res::unsigned-integer-size(size)-unit(8)>> = bytes
+        <<res::unsigned-integer-size(^size)-unit(8)>> = bytes
         res
 
       bytes when is_binary(bytes) ->
         size = byte_size(bytes)
-        <<res::unsigned-integer-size(size)-unit(8)>> = bytes
+        <<res::unsigned-integer-size(^size)-unit(8)>> = bytes
         res
     end
   end
